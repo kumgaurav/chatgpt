@@ -19,8 +19,6 @@ dependencies:
     - flask
     - boto3
     - ipykernel
-    - pydotplus
-    - seaborn
     - pip:
         - tensorflow-macos
         - tensorflow-metal
