@@ -6,3 +6,5 @@ To enable autocomplete in jupyter
 conda update --all 
 conda install -c anaconda notebook  
 conda install -c conda-forge jupyter_contrib_nbextensions 
+
+To check all functions argument available use escape + tab
