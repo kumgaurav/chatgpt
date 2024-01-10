@@ -1,0 +1,26 @@
+name: coursera
+channels:
+  - apple
+  - conda-forge
+dependencies:
+    - python=3.8.8
+    - pip>=19.0
+    - notebook=6.4.12
+    - jupyter_contrib_nbextensions
+    - numpy=1.20.1
+    - scikit-learn
+    - scipy
+    - pandas=1.2.3
+    - pandas-datareader
+    - matplotlib
+    - pillow
+    - tqdm
+    - nb_black
+    - requests
+    - h5py
+    - pyyaml
+    - flask
+    - boto3
+    - ipykernel
+    - pydotplus
+    - seaborn
