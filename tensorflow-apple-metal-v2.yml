@@ -1,0 +1,12 @@
+name: tensorflow
+channels:
+  - apple
+  - conda-forge
+dependencies:
+    - python=3.10.9
+    - pip>=19.0
+    - jupyter
+    - pandas
+    - scipy
+    - scikit-learn
+    - matplotlib
