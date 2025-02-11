@@ -6,9 +6,9 @@ import yfinance as yf
 import pandas as pd
 import os
 import configparser
-
+from pprint import pprint
 from pyspark.sql.functions import lit, col, max, lag
-
+from datetime import datetime, timedelta
 
 # Create a data folder in your current dir.
 def save_data(df, filename):
@@ -39,7 +39,7 @@ def main():
     print("url : ", url)
     print("MySQL User : ", username)
     # We can get data by our choice by giving days bracket
-    start_date = "2017-01-01"
+    start_date = "2024-06-01"
     max_start_date = None
     today = date.today()
     end_date = today.strftime("%Y-%m-%d")
@@ -50,25 +50,53 @@ def main():
                                                 dbtable=table,
                                                 user=username,
                                                 password=password).load()
-    max_start_date = stockdf.agg(max("Date")).collect()[0][0]
-    if max_start_date:
-        start_date = max_start_date
-    print("max_start_date : ", max_start_date)
-    print("start_date : ", start_date)
-    print("end_date : ", end_date)
-    if end_date == max_start_date:
+    #stockdf.show(2)
+    #max_start_date = stockdf.agg(max("Date")).collect()[0][0]
+    # Group by 'symbol' and calculate the maximum date for each symbol
+    max_date_by_symbol_df = stockdf.groupBy("symbol").agg(max("Date").alias("max_date"))
+    # Convert max_date_by_symbol_df to a dictionary for lookup
+    max_date_by_symbol_dict = {row["symbol"]: row["max_date"] for row in max_date_by_symbol_df.collect()}
+    #pprint(max_date_by_symbol_dict)
+    # Broadcast the dictionary for distributed lookup
+    broadcast_max_dates = spark.sparkContext.broadcast(max_date_by_symbol_dict)
+    if end_date == today:
         print("Nothing to bring and existing")
         spark.sparkContext.stop()
         exit(0)
     files = []
     for tik in ticker_list:
+        max_sync_date = broadcast_max_dates.value.get(tik, start_date)
+        if max_sync_date != start_date:  # Check if the date exists in the dictionary
+            # Check if max_sync_date is a string, and parse only if necessary
+            if isinstance(max_sync_date, str):
+                max_sync_date = datetime.strptime(max_sync_date, "%Y-%m-%d").date()  # Convert to date
+            # Increment the date by 1 day
+            max_sync_date = max_sync_date + timedelta(days=1)
+            max_start_date = max_sync_date
+        print(f"max_sync_date : {max_sync_date} for symbol : {tik}")
+        start_date = max_sync_date
+        print("max_start_date : ", max_start_date)
+        print("start_date : ", start_date)
+        print("end_date : ", end_date)
         filename = get_data(tik, start_date, end_date, files)
+        print("filename : ", filename)
         dft = spark.read.option("header", True).csv('./data/' + str(filename) + '.csv')
         df = dft.withColumn("symbol", lit(tik))
+        df.show(2, truncate=False)
+        if df.rdd.isEmpty():
+            print("Nothing to bring for symbol : ", tik)
+            continue
         max_start_date_tic = df.agg(max("Date")).collect()[0][0]
+        if isinstance(max_start_date_tic, str):
+            max_start_date_tic = datetime.strptime(max_start_date_tic, "%Y-%m-%d").date()
+        if isinstance(max_start_date, str):
+            max_start_date = datetime.strptime(max_start_date, "%Y-%m-%d").date()
+        if max_start_date is None:
+            max_start_date = datetime.strptime(max_sync_date, "%Y-%m-%d").date()
         print("max_start_date_tic : ", max_start_date_tic)
+        print("max_start_date: ", max_start_date)
         print("str(max_start_date_tic) == str(max_start_date) : ", (str(max_start_date_tic) == str(max_start_date)))
-        if str(max_start_date_tic) == str(max_start_date):
+        if max_start_date_tic <= max_start_date:
             print("Nothing to bring for symbol : ", tik)
             continue
         # Assuming you have a DataFrame named 'df' with columns 'date' and 'close_price'
