@@ -7,7 +7,7 @@ import pandas as pd
 import os
 import configparser
 from pprint import pprint
-from pyspark.sql.functions import lit, col, max, lag
+from pyspark.sql.functions import lit, col, max, lag, when
 from datetime import datetime, timedelta
 
 directory = "./data"
@@ -120,9 +120,11 @@ def main():
         # You can sort the DataFrame by date to ensure consecutive dates are in order
         df = df.orderBy("date")
         # Define a window specification for the lag function
-        window_spec = Window.orderBy("date")
+        window_spec = Window.partitionBy("Symbol").orderBy("Date")
+        # Calculate the lag of Close price
+        prev_close = lag("Close").over(window_spec)
         # Calculate the price change by subtracting the previous day's close_price from the current day's close_price
-        df = df.withColumn("price_change", df["Close"] - lag(df["Close"]).over(window_spec))
+        df = df.withColumn("price_change", when(prev_close.isNull(), col("Close") - col("Open")).otherwise(col("Close") - prev_close))
         df.head()
         df.show(10)
         df.write.format('jdbc').options(url=url,
