@@ -46,8 +46,8 @@ def main():
     table = config.get('mysql', 'table')
     username = config.get('mysql', 'username')
     password = config.get('mysql', 'password')
-    # ticker_list = ["AAPL", "GOOGL", "NBIS", "AI", "OPFI"]
-    ticker_list = config.get('stocks', 'symbols').split()
+    ticker_list = ["BABA", "HIMS", "BRKB", "ATCH", "QRTEB","HAS","ATCH"]
+    # ticker_list = config.get('stocks', 'symbols').split()
     print("ticker_list : ", ticker_list)
     start_date = "2024-06-01"
     end_date = "2025-02-22"

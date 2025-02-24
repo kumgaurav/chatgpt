@@ -34,3 +34,5 @@ def initialize_spark(app_name="MyApp", extra_configs=None):
     spark = get_spark(app_name, extra_configs)
     set_sql_config(spark)
     return spark
+
+

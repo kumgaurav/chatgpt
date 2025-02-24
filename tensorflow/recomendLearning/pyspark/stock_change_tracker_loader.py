@@ -2,7 +2,7 @@ import yfinance as yf
 import pandas as pd
 from pyspark.sql import SparkSession, Window
 from pyspark.sql.functions import col, to_timestamp, to_date, lit, row_number, max, abs, format_number, coalesce, \
-    current_date, when, datediff
+    current_date, when, datediff, round
 from pyspark.sql.types import StructType, StructField, StringType, DoubleType, TimestampType
 from datetime import datetime, timedelta
 import configparser
@@ -52,8 +52,12 @@ def main():
 
         # Step 2: Coalesce the date_added column to current_date if it is null
         joined_df = joined_df.withColumn("date_added", coalesce(col("date_added"), current_date())) \
-            .withColumn("current_price", coalesce(col("current_price"), col("max_close_price"))) \
-            .withColumn("price_when_added", coalesce(col("price_when_added"), col("max_close_price")))
+            .withColumn("current_price", when(col("max_close_price").isNotNull(), col("max_close_price")).otherwise(
+            col("current_price"))) \
+            .withColumn("price_when_added",
+                        when(col("price_when_added").isNotNull(), col("price_when_added")).otherwise(
+                            col("max_close_price")))
+        # joined_df.filter(col("symbol") == lit("NFLX")).show(10, truncate=False)
         # Step 3: Calculate price_change as percentage difference
         joined_df = joined_df.withColumn("change_since_added", format_number(
             (col("current_price") - col("price_when_added")) / col("price_when_added") * 100, 3))
@@ -65,6 +69,7 @@ def main():
         # joined_df = joined_df.withColumn("is_active", coalesce(col("is_active"), lit(True)))
         joined_df = joined_df.withColumn("is_active", lit(True))
         # Step 6: Add is_active column based on the conditions
+        # joined_df.filter(col("symbol") == lit("NFLX")).show(10, truncate=False)
         joined_df = joined_df.withColumn("is_active",
                                          when(
                                              (col("is_positive_earning") == False) & (
@@ -77,10 +82,7 @@ def main():
                                              True
                                          ).otherwise(
                                              col("is_active")))  # Keep existing value of is_active if no conditions match
-        joined_df = joined_df.withColumn("price_when_added",
-                                         format_number(col("price_when_added").cast(DoubleType()), 3).cast(
-                                             DoubleType())) \
-            .withColumn("current_price", format_number(col("current_price").cast(DoubleType()), 3).cast(DoubleType()))
+        # joined_df.filter(col("symbol") == lit("NFLX")).show(10, truncate=False)
         # Perform a left join to preserve existing values
         merged_df = joined_df.alias("new").join(
             stock_change_tracker_df.alias("old"),
@@ -92,15 +94,17 @@ def main():
                 "date_added"),
             when(col("old.price_when_added").isNotNull(), col("old.price_when_added")).otherwise(
                 col("new.price_when_added")).alias("price_when_added"),
-            col("new.current_price"),
+            when(col("old.current_price").isNotNull(), col("old.current_price")).otherwise(
+                col("new.current_price")).alias("current_price"),
             col("new.change_since_added"),
             col("new.is_positive_earning"),
             col("new.is_active")
         )
-        merged_df = merged_df.withColumn("price_when_added",
-                                         format_number(col("price_when_added").cast(DoubleType()), 3).cast(
-                                             DoubleType())) \
-            .withColumn("current_price", format_number(col("current_price").cast(DoubleType()), 3).cast(DoubleType()))
+        # merged_df.filter(col("symbol") == lit("NFLX")).show(10, truncate=False)
+        merged_df = merged_df.withColumn("price_when_added", round(col("price_when_added"), 3).cast(DoubleType())) \
+            .withColumn("current_price", round(col("current_price"), 3).cast(DoubleType())) \
+            .withColumn("change_since_added", round(col("change_since_added"), 3).cast(DoubleType()))
+        # merged_df.filter(col("symbol") == lit("NFLX")).show(10, truncate=False)
         merged_df.show(10, truncate=False)
         stock_change_tracker_table_tmp = stock_change_tracker_table + "_tmp"
         merged_df.write.format('jdbc').options(url=url,

@@ -9,6 +9,7 @@ import os
 
 
 def main():
+    filename = "/Users/gaurav/workspace/datascience/chatgpt/tensorflow/recomendLearning/pyspark/practice/finance/model/output/*.csv"
     spark = SparkSession.builder.master("local[1]").appName("Stock Loader") \
         .config("spark.jars",
                 "/Users/gaurav/.m2/repository/com/mysql/mysql-connector-j/8.0.33/mysql-connector-j-8.0.33.jar").getOrCreate()
@@ -17,40 +18,35 @@ def main():
     print("Sections : ", config.sections())
     sql_driver = "com.mysql.cj.jdbc.Driver"
     url = 'jdbc:mysql://localhost/{}'.format(config.get('mysql', 'database'))
-    table = config.get('mysql', 'table')
+    table = "stocks_prediction"
     stock_change_tracker_table = config.get('mysql', 'stock_change_tracker_table')
     username = config.get('mysql', 'username')
     password = config.get('mysql', 'password')
     print("url : ", url)
     print("MySQL User : ", username)
-    # List of stock symbols to process
+
     stockdf = spark.read.format("jdbc").options(url=url,
                                                 driver=sql_driver,
                                                 dbtable=table,
                                                 user=username,
                                                 password=password).load()
-    # Calculate the max date
-    max_start_date = stockdf.agg(max("Date")).collect()[0][0]
-    # stockdf.printSchema()
-    print(f"max_date : {max_start_date}")
-    stockdf = stockdf.filter(col("Date") == lit(max_start_date))
-    # Assuming max_start_date is a datetime or string object
-    stockdf = stockdf.withColumnRenamed("Open", "price_when_added") \
-        .withColumnRenamed("Close", "current_price") \
-        .withColumn("date_added", lit(max_start_date)) \
-        .withColumn("change_since_added",
-                    format_number(abs((col("current_price") - col("price_when_added")) / col("price_when_added")) * 100, 3))
-    stockdf = stockdf\
-        .withColumn("price_when_added", format_number(abs(col("price_when_added")), 3)) \
-        .withColumn("current_price", format_number(abs(col("current_price")), 3))
-    stockdf = stockdf.select("symbol", "date_added", "price_when_added", "current_price", "change_since_added")
+    # List of stock symbols to process
 
-    stockdf.show(10)
-    stockdf.write.format('jdbc').options(url=url,
-                                         driver=sql_driver,
-                                         dbtable=stock_change_tracker_table,
-                                         user=username,
-                                         password=password).mode('overwrite').save()
+    stk_new_df = spark.read.format("csv") \
+        .option("quote", "\"") \
+        .option("delimiter", ",") \
+        .option("encoding", "UTF-8") \
+        .option("escape", "\\").option("header", True).csv(filename)
+
+    # stk_new_df.show(10)
+    existing_data = stockdf.select("Date", "Symbol")
+    filtered_data = stk_new_df.join(existing_data, ["Date", "Symbol"], "left_anti")
+    filtered_data.show(5, truncate=False)
+    filtered_data.write.format('jdbc').options(url=url,
+                                               driver=sql_driver,
+                                               dbtable=table,
+                                               user=username,
+                                               password=password).mode('append').save()
     spark.sparkContext.stop()
 
 
