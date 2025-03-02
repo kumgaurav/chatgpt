@@ -22,7 +22,7 @@ period_mapping = {
 
 def get_data(tickers, start_date, end_date):
     # 📌 Download stock price data
-    data = yf.download(tickers, start=start_date, end=end_date, progress=False)
+    data = yf.download(tickers, start=start_date, progress=False)  # , end=end_date it's not required
     # ✅ Convert MultiIndex columns to normal DataFrame with tickers as a column
     data = data.stack(level=1, future_stack=True).reset_index()
     data.rename(columns={"level_1": "Ticker"}, inplace=True)
@@ -44,19 +44,31 @@ def main():
     sql_driver = "com.mysql.cj.jdbc.Driver"
     url = 'jdbc:mysql://localhost/{}'.format(config.get('mysql', 'database'))
     table = config.get('mysql', 'table')
+    stock_change_tracker_table = stock_change_tracker_table = "stock_change_tracker"
     username = config.get('mysql', 'username')
     password = config.get('mysql', 'password')
-    ticker_list = ["BABA", "HIMS", "BRKB", "ATCH", "QRTEB","HAS","ATCH"]
+    # ticker_list = ["GSHD","MCD","DFH","GRBK","ENSG","AWI","TMCH","ODD","STRL","NOVT","ITRI","BUD"]
     # ticker_list = config.get('stocks', 'symbols').split()
+    change_tracker_df = spark.read.format("jdbc").options(url=url, driver=sql_driver, user=username, password=password,
+                                                          dbtable=stock_change_tracker_table).load()
+    change_tracker_df = change_tracker_df.filter(col("is_active") == True).select("symbol")
+    ticker_list = change_tracker_df.rdd.flatMap(lambda x: x).collect()
+    # change_tracker_df.show(10, truncate=False)
     print("ticker_list : ", ticker_list)
     start_date = "2024-06-01"
     end_date = "2025-02-22"
+    today = date.today()
+    end_date = today.strftime("%Y-%m-%d")
     stockdf = spark.read.format("jdbc").options(url=url,
                                                 driver=sql_driver,
                                                 dbtable=table,
                                                 user=username,
                                                 password=password).load()
     # stockdf.show(2)
+    max_start_date = stockdf.agg(max("Date")).collect()[0][0]
+    start_date = max_start_date
+    print("start_date : ", start_date)
+    print("end_date : ", end_date)
     price_filename = get_data(ticker_list, start_date, end_date)
     # price_filename = "data/stock_prices_2024-06-01.csv"
     print("filename : ", price_filename)
@@ -82,6 +94,7 @@ def main():
                                                dbtable=table,
                                                user=username,
                                                password=password).mode('append').save()
+
     spark.stop()
 
 

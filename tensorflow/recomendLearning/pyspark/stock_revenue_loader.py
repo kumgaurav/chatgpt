@@ -105,7 +105,7 @@ def main():
     print("Sections : ", config.sections())
     sql_driver = "com.mysql.cj.jdbc.Driver"
     url = 'jdbc:mysql://localhost/{}'.format(config.get('mysql', 'database'))
-    table = config.get('mysql', 'earning_table')
+    earning_table = config.get('mysql', 'earning_table')
     history_table = config.get('mysql', 'earning_table') + "_history"
     revenue_table = config.get('mysql', 'revenue_table')
     username = config.get('mysql', 'username')
@@ -207,7 +207,7 @@ def main():
     earnings_df_rank_1.show(10)
     # earnings_df_rank_1.write.format('jdbc').options(url=url,
     #                                                 driver=sql_driver,
-    #                                                 dbtable=table,
+    #                                                 dbtable=earning_table,
     #                                                 user=username,
     #                                                 password=password).mode('overwrite').save()
     earnings_history_df.write.format('jdbc').options(url=url,

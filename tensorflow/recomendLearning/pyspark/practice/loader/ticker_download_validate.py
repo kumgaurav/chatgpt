@@ -5,8 +5,8 @@ import pandas as pd
 def save_data(df, filename):
     df.to_csv(filename + '.csv')
 
-start_date = "2025-02-20"
-end_date="2025-02-23"
+start_date = "2025-02-24"
+end_date="2025-02-24"
 # Define a list of ticker symbols to download
 tickerStrings = ['AAPL','AMZN','NVDA']
 dataname = 'AAPL' + '_' + str(end_date)

@@ -67,7 +67,7 @@ def main():
             "max_close_price")
         # Step 5: Coalesce is_active to True if it is null
         # joined_df = joined_df.withColumn("is_active", coalesce(col("is_active"), lit(True)))
-        joined_df = joined_df.withColumn("is_active", lit(True))
+        # joined_df = joined_df.withColumn("is_active", lit(True))
         # Step 6: Add is_active column based on the conditions
         # joined_df.filter(col("symbol") == lit("NFLX")).show(10, truncate=False)
         joined_df = joined_df.withColumn("is_active",
@@ -80,7 +80,8 @@ def main():
                                              (col("is_positive_earning") == True) & (col("is_active") == False),
                                              # only activate when is_positive_earning is True
                                              True
-                                         ).otherwise(
+                                         ).when(col("is_active").isNull(), True)
+                                         .otherwise(
                                              col("is_active")))  # Keep existing value of is_active if no conditions match
         # joined_df.filter(col("symbol") == lit("NFLX")).show(10, truncate=False)
         # Perform a left join to preserve existing values

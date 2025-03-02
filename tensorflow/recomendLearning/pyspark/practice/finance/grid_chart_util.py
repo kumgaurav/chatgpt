@@ -149,3 +149,4 @@ def _create_stock_plot(ax, stock_data, symbol):
 
     # Ensure date labels are readable
     ax.tick_params(axis='x', rotation=45)
+
