@@ -2,10 +2,12 @@
 from pandas.plotting import autocorrelation_plot
 import matplotlib.pyplot as plt
 
+
 def autocorrelation_plot_util(series):
     autocorrelation_plot(series)
     plt.figure(figsize=(10, 7), dpi=80)
     plt.show()
+
 
 def plot_real_vs_predicted(test, predictions):
     plt.figure(figsize=(12, 6), dpi=100)
