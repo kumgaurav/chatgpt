@@ -234,7 +234,7 @@ def main():
         # Use incremental loading: start from the latest date in database
         # This ensures we only download new data, not duplicates
         if not stockdf.head(1):  # Check if stockdf is empty
-            start_date = (date.today() - timedelta(days=30)).strftime("%Y-%m-%d")
+            start_date = (date.today() - timedelta(days=370)).strftime("%Y-%m-%d")
             print("📅 Database is empty, using 30-day lookback")
         else:
             max_start_date = stockdf.agg(max("Date")).collect()[0][0]
