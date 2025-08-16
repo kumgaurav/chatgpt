@@ -187,12 +187,42 @@ def pandas_to_spark(spark: SparkSession, pdf: pd.DataFrame) -> DataFrame:
     # Replace inf/NaN
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
     df = df.where(pd.notna(df), None)
+    # Coerce object columns that are largely numeric into numeric to avoid mixed Spark types per column
+    for col in df.columns:
+        if df[col].dtype == object:
+            numeric_series = pd.to_numeric(df[col], errors='coerce')
+            non_null_original = pd.Series(df[col]).notna().sum()
+            non_null_numeric = numeric_series.notna().sum()
+            if non_null_original > 0 and (non_null_numeric / max(non_null_original, 1)) >= 0.7:
+                df[col] = numeric_series
+    # Re-normalize nulls after coercion
+    df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    df = df.where(pd.notna(df), None)
     # Sanitize any remaining numpy or complex objects cell-wise
     if hasattr(df, 'map'):
         df = df.map(_sanitize_value_for_spark)
     else:
         df = df.applymap(_sanitize_value_for_spark)
     records = df.to_dict(orient='records')
-    return spark.createDataFrame(records)
+    # Build an explicit schema to avoid Spark inference failures when columns are all-null
+    try:
+        import pandas.api.types as ptypes
+        fields = []
+        for c in df.columns:
+            dtype = df[c].dtype
+            if ptypes.is_integer_dtype(dtype):
+                spark_type = T.LongType()
+            elif ptypes.is_float_dtype(dtype):
+                spark_type = T.DoubleType()
+            elif ptypes.is_bool_dtype(dtype):
+                spark_type = T.BooleanType()
+            else:
+                spark_type = T.StringType()
+            fields.append(T.StructField(c, spark_type, True))
+        schema = T.StructType(fields)
+        return spark.createDataFrame(records, schema=schema)
+    except Exception:
+        # Fallback: let Spark infer if our schema logic fails for any reason
+        return spark.createDataFrame(records)
 
 

@@ -123,12 +123,7 @@ def main():
     tickers_to_fetch = utils_earnings.get_tickers_needing_earnings_update(
         config, spark, url, sql_driver, username, password, ticker_list, 'last_stock_earnings'
     )
-    test_tickers = tickers_to_fetch[:1]
-    
-    if test_tickers:
-        print(f"📝 Need to fetch earnings for {len(test_tickers)} tickers; first batch: {test_tickers}")
-    else:
-        print("📝 Need to fetch earnings for 0 tickers")
+    #tickers_to_fetch = tickers_to_fetch[:1]
     
     # ================================
     # DATE RANGE SETUP
@@ -145,62 +140,74 @@ def main():
         print(f"⚠️ Adjusted start_date to prevent future date issues: {start_date}")
     
     print(f"📅 Date range: {start_date} to {end_date}")
-    print(f"🔎 Fetching yfinance datasets for: {test_tickers} on {start_date}")
-    dataframes = yfinance_utils.get_yfinance_dataframes(test_tickers, start_date)
-    stock_earnings_df = dataframes['earnings']
-    earnings_estimate_df = dataframes['earnings_estimate']
-    earnings_history_df = dataframes['earnings_history']
-    quarterly_revenue_df = dataframes['quarterly_revenue']
-    growth_estimates_df = dataframes['growth_estimates']
-    revenue_estimates_df = dataframes['revenue_estimates']
-    quarterly_income_df = dataframes['quarterly_income']
-    stock_details_df = dataframes['stock_details']
-    counts = {k: len(v) for k, v in dataframes.items()}
-    print(f"✅ Pulled datasets: {counts}")
-    print(f"🔎 earnings_df sample:\n{stock_earnings_df.head().to_string(index=False) if not stock_earnings_df.empty else 'EMPTY'}")
-    print(f"🔎 earnings_estimate_df sample:\n{earnings_estimate_df.head().to_string(index=False) if not earnings_estimate_df.empty else 'EMPTY'}")
+    print(f"🔎 Will process {len(tickers_to_fetch)} tickers individually on {start_date}")
 
-    # ================================
-    # WRITE BACK MISSING ROWS PER TABLE
-    # ================================
-    wrote = {}
-    print("💾 Writing stock_details missing rows (by Symbol)...")
-    wrote['stock_details'] = data_utility.write_stock_details(
-        spark, data_utility.pandas_to_spark(spark, stock_details_df), url, sql_driver, username, password
-    )
-    print("💾 Writing stock_earnings missing rows (by ticker, earnings_date)...")
-    wrote['stock_earnings'] = data_utility.write_stock_earnings(
-        spark, data_utility.pandas_to_spark(spark, stock_earnings_df), url, sql_driver, username, password
-    )
-    print("💾 Writing stock_earnings missing rows (by ticker, earnings_date)...")
-    wrote['last_stock_earnings'] = data_utility.write_last_stock_earnings(
-        spark, data_utility.pandas_to_spark(spark, stock_earnings_df), url, sql_driver, username, password
-    )
-    print("💾 Writing earnings_estimates missing rows (by ticker, earnings_date)...")
-    wrote['earnings_estimate'] = data_utility.write_earnings_estimates(
-        spark, data_utility.pandas_to_spark(spark, earnings_estimate_df), url, sql_driver, username, password
-    )
-    print("💾 Writing earnings_history missing rows (by ticker, earnings_date)...")
-    wrote['earnings_history'] = data_utility.write_earnings_history(
-        spark, data_utility.pandas_to_spark(spark, earnings_history_df), url, sql_driver, username, password
-    )
-    print("💾 Writing quarterly_revenue missing rows (by ticker, report_date)...")
-    wrote['quarterly_revenue'] = data_utility.write_quarterly_revenue(
-        spark, data_utility.pandas_to_spark(spark, quarterly_revenue_df), url, sql_driver, username, password
-    )
-    print("💾 Writing growth_estimates missing rows (by ticker, estimate_fetch_date)...")
-    wrote['growth_estimates'] = data_utility.write_growth_estimates(
-        spark, data_utility.pandas_to_spark(spark, growth_estimates_df), url, sql_driver, username, password
-    )
-    print("💾 Writing revenue_estimates missing rows (by ticker, next_earnings_date)...")
-    wrote['revenue_estimates'] = data_utility.write_revenue_estimates(
-        spark, data_utility.pandas_to_spark(spark, revenue_estimates_df), url, sql_driver, username, password
-    )
-    print("💾 Writing quarterly_income missing rows (by ticker, report_date)...")
-    wrote['quarterly_income'] = data_utility.write_quarterly_income(
-        spark, data_utility.pandas_to_spark(spark, quarterly_income_df), url, sql_driver, username, password
-    )
-    print(f"💾 Rows written per table (missing-only appends): {wrote}")
+    successes = []
+    failures = []
+    total = len(tickers_to_fetch)
+    # Simple per-run CSV logs for resume/audit
+    run_ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+    logs_dir = os.path.join(os.path.dirname(__file__), 'run_logs')
+    os.makedirs(logs_dir, exist_ok=True)
+    success_log = os.path.join(logs_dir, f'success_{run_ts}.csv')
+    failure_log = os.path.join(logs_dir, f'failure_{run_ts}.csv')
+    with open(success_log, 'a') as sf:
+        sf.write('ticker,details\n')
+    with open(failure_log, 'a') as ff:
+        ff.write('ticker,error\n')
+    for idx, ticker in enumerate(tickers_to_fetch, start=1):
+        try:
+            print(f"➡️ [{idx}/{total}] Fetching datasets for {ticker}")
+            dataframes = yfinance_utils.get_yfinance_dataframes([ticker], start_date)
+
+            stock_earnings_df = dataframes['earnings']
+            earnings_estimate_df = dataframes['earnings_estimate']
+            earnings_history_df = dataframes['earnings_history']
+            quarterly_revenue_df = dataframes['quarterly_revenue']
+            growth_estimates_df = dataframes['growth_estimates']
+            revenue_estimates_df = dataframes['revenue_estimates']
+            quarterly_income_df = dataframes['quarterly_income']
+            stock_details_df = dataframes['stock_details']
+
+            wrote = {}
+            wrote['stock_details'] = data_utility.write_stock_details(
+                spark, data_utility.pandas_to_spark(spark, stock_details_df), url, sql_driver, username, password
+            )
+            wrote['stock_earnings'] = data_utility.write_stock_earnings(
+                spark, data_utility.pandas_to_spark(spark, stock_earnings_df), url, sql_driver, username, password
+            )
+            wrote['last_stock_earnings'] = data_utility.write_last_stock_earnings(
+                spark, data_utility.pandas_to_spark(spark, stock_earnings_df), url, sql_driver, username, password
+            )
+            wrote['earnings_estimate'] = data_utility.write_earnings_estimates(
+                spark, data_utility.pandas_to_spark(spark, earnings_estimate_df), url, sql_driver, username, password
+            )
+            wrote['earnings_history'] = data_utility.write_earnings_history(
+                spark, data_utility.pandas_to_spark(spark, earnings_history_df), url, sql_driver, username, password
+            )
+            wrote['quarterly_revenue'] = data_utility.write_quarterly_revenue(
+                spark, data_utility.pandas_to_spark(spark, quarterly_revenue_df), url, sql_driver, username, password
+            )
+            wrote['growth_estimates'] = data_utility.write_growth_estimates(
+                spark, data_utility.pandas_to_spark(spark, growth_estimates_df), url, sql_driver, username, password
+            )
+            wrote['revenue_estimates'] = data_utility.write_revenue_estimates(
+                spark, data_utility.pandas_to_spark(spark, revenue_estimates_df), url, sql_driver, username, password
+            )
+            wrote['quarterly_income'] = data_utility.write_quarterly_income(
+                spark, data_utility.pandas_to_spark(spark, quarterly_income_df), url, sql_driver, username, password
+            )
+            print(f"✅ {ticker}: wrote {wrote}")
+            successes.append(ticker)
+            
+        except Exception as e:
+            print(f"❌ {ticker}: {e}")
+            failures.append((ticker, str(e)))
+            pass
+
+    print(f"🎉 Completed. Successes: {len(successes)} / {total}. Failures: {len(failures)}")
+    if failures:
+        print(f"Failed tickers: {[t for t, _ in failures]}")
     
 
 

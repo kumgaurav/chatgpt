@@ -107,6 +107,13 @@ def get_yfinance_dataframes(tickers, fetch_date):
             upcoming_raw = info.get('earningsDate', None)
 
         normalized_edate = _normalize_earnings_date(upcoming_raw, fetch_date)
+        # Ensure not in the past to avoid re-processing same ticker on next run
+        try:
+            today_str = date.today().isoformat()
+            if normalized_edate < today_str:
+                normalized_edate = today_str
+        except Exception:
+            pass
         print(f"[yfinance] {ticker} upcoming_raw={repr(upcoming_raw)} -> normalized={normalized_edate}")
 
         earnings_list.append({
@@ -114,16 +121,17 @@ def get_yfinance_dataframes(tickers, fetch_date):
             "short_name": info.get("shortName", ""),
             "sector": info.get("sector", ""),
             "industry": info.get("industry", ""),
-            "market_cap": info.get("marketCap", ""),
-            "revenue": info.get("totalRevenue", ""),
-            "gross_profit": info.get("grossProfits", ""),
-            "ebitda": info.get("ebitda", ""),
+            # Use None for numeric fields to avoid mixed dtypes/strings
+            "market_cap": info.get("marketCap", None),
+            "revenue": info.get("totalRevenue", None),
+            "gross_profit": info.get("grossProfits", None),
+            "ebitda": info.get("ebitda", None),
             "earnings_date": normalized_edate,
-            "fifty_two_week_high": info.get("fiftyTwoWeekHigh", ""),
-            "fifty_two_week_low": info.get("fiftyTwoWeekLow", ""),
-            "dividend_yield": info.get("dividendYield", ""),
-            "pe_ratio": info.get("trailingPE", ""),
-            "forward_pe": info.get("forwardPE", ""),
+            "fifty_two_week_high": info.get("fiftyTwoWeekHigh", None),
+            "fifty_two_week_low": info.get("fiftyTwoWeekLow", None),
+            "dividend_yield": info.get("dividendYield", None),
+            "pe_ratio": info.get("trailingPE", None),
+            "forward_pe": info.get("forwardPE", None),
         })
 
         # ✅ Extract stock details (company fundamentals and metadata)
